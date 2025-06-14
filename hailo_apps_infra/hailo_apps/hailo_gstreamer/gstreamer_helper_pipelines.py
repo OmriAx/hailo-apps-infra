@@ -283,6 +283,31 @@ def DISPLAY_PIPELINE(video_sink=GST_VIDEO_SINK, sync='true', show_fps='false', n
 
     return display_pipeline
 
+def DISPLAY_PIPELINE_DRAW(
+    video_sink=GST_VIDEO_SINK,
+    sync='true',
+    show_fps='false',
+    name='hailo_display_draw'
+):
+    """
+    Like DISPLAY_PIPELINE, but adds a cairooverlay after hailooverlay for custom drawing.
+    """
+    # draw_overlay will be a cairooverlay you can hook into
+    draw_overlay = (
+        f'cairooverlay name={name}_draw '
+        # you can pass properties here like anti-aliasing, but defaults usually suffice
+    )
+
+    return (
+        f'{OVERLAY_PIPELINE(name=f"{name}_overlay")} ! '
+        f'{draw_overlay} ! '
+        f'{QUEUE(name=f"{name}_videoconvert_q")} ! '
+        f'videoconvert name={name}_videoconvert n-threads=2 qos=false ! '
+        f'{QUEUE(name=f"{name}_q")} ! '
+        f'fpsdisplaysink name={name} video-sink={video_sink} '
+        f'sync={sync} text-overlay={show_fps} signal-fps-measurements=true'
+    )
+
 def FILE_SINK_PIPELINE(output_file='output.mkv', name='file_sink', bitrate=5000):
     """
     Creates a GStreamer pipeline string for saving the video to a file in .mkv format.

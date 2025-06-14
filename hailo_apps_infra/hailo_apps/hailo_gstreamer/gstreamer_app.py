@@ -10,6 +10,8 @@ import cv2
 import numpy as np
 import time
 import queue
+import cairo
+
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib, GObject
 from .gstreamer_helper_pipelines import (
@@ -192,23 +194,26 @@ class GStreamerApp:
         return True
 
     def create_pipeline(self):
-        # Initialize GStreamer
         Gst.init(None)
-
         pipeline_string = self.get_pipeline_string()
+
         try:
             self.pipeline = Gst.parse_launch(pipeline_string)
         except Exception as e:
             print(f"Error creating pipeline: {e}", file=sys.stderr)
             sys.exit(1)
 
-        # Connect to hailo_display fps-measurements
-        if self.show_fps:
-            print("Showing FPS")
-            self.pipeline.get_by_name("hailo_display").connect("fps-measurements", self.on_fps_measurement)
+        # connect your custom‐draw callback to the cairooverlay
+        draw_ov = self.pipeline.get_by_name("hailo_display_draw")
+        if draw_ov:
+            draw_ov.connect("draw", self.on_custom_draw, self.user_data)
 
-        # Create a GLib Main Loop
+        # rest of your setup…
+        if self.show_fps:
+            self.pipeline.get_by_name("hailo_display") \
+                .connect("fps-measurements", self.on_fps_measurement)
         self.loop = GLib.MainLoop()
+
 
     def bus_call(self, bus, message, loop):
         t = message.type
@@ -308,6 +313,33 @@ class GStreamerApp:
     def get_pipeline_string(self):
         # This is a placeholder function that should be overridden by the child class
         return ""
+    
+    def on_custom_draw(self, overlay, context, timestamp, user_data):
+        """
+        Custom draw function to be called by the cairo overlay element.
+        This function is called by the cairo overlay element to draw custom content on the video frame.
+        Args:
+            overlay: The cairo overlay element
+            context: The cairo context to draw on
+            timestamp: The timestamp of the frame
+            user_data: User-defined data passed to the callback (app_callback_class instance)
+        """
+        # This is a placeholder function that should be overridden by the child class
+
+        # set up your font
+        context.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        context.set_font_size(24.0)
+
+        # choose a color (white, semi-opaque)
+        context.set_source_rgba(1.0, 1.0, 1.0, 0.8)
+
+        # position and draw the text
+        x, y = 20, 40
+        context.move_to(x, y)
+        context.show_text("Hailo Simple Draw")
+
+        # finalize (stroke fills automatically for text)
+        context.stroke()
 
     def dump_dot_file(self):
         print("Dumping dot file...")
