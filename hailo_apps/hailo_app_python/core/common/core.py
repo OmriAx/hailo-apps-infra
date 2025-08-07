@@ -8,6 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from .defines import (
+    LPR_DIR_NAME,
     DEFAULT_DOTENV_PATH,
     DEFAULT_LOCAL_RESOURCES_PATH,
     DEPTH_MODEL_NAME,
@@ -167,7 +168,11 @@ def get_resource_path(
     if resource_type == MULTI_SOURCE_DIR_NAME and model:
         return (root / MULTI_SOURCE_DIR_NAME / model)
     if resource_type == DEFAULT_LOCAL_RESOURCES_PATH and model:
-        return root / DEFAULT_LOCAL_RESOURCES_PATH / model
+        
+        return (root / DEFAULT_LOCAL_RESOURCES_PATH / model)
+    if resource_type == LPR_DIR_NAME and model:
+        return (root / LPR_DIR_NAME / model)
+
 
     if resource_type == RESOURCES_MODELS_DIR_NAME:
         if model:

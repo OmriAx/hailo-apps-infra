@@ -1,4 +1,6 @@
 
+postprocesses_inc = include_directories('/usr/include/hailo/tappas/postprocesses', is_system: true)  
+
 ################################################
 # YOLO HAILORTPP POST SOURCES
 ################################################
@@ -8,7 +10,7 @@ yolo_hailortpp_sources = [
 ]
 shared_library('yolo_hailortpp_postprocess',
     yolo_hailortpp_sources,
-    include_directories : rapidjson_inc,
+    include_directories : [rapidjson_inc, postprocesses_inc],  
     dependencies : postprocess_dep,
     gnu_symbol_visibility : 'default',
     install: true,

@@ -156,6 +156,22 @@ RESOURCES_DIRS_MAP = [
 # GStreamer defaults
 GST_REQUIRED_VERSION = "1.0"
 
+# LPR Pipeline defaults
+LPR_APP_TITLE = "Hailo License Plate Recognition App"
+LPR_PIPELINE = "license_plate_recognition"
+LPR_VEHICLE_HEF_NAME = "yolov5m_vehicles"
+LPR_VEHICLE_POSTPROCESS_FUNCTION = "detect_vehicle"
+LPR_TEXT_DET_MODEL_NAME = "ocr_det"
+LPT_TEXT_DET_POSTPROCESS_FUNCTION = "filter_letterbox"
+LPR_OCR_MODEL_NAME= "ocr"
+LPR_OCR_POSTPROCESS_FUNCTION = "filter_letterbox"
+LPR_POSTPROCESS_SO_FILENAME = "ocr_lpr.so"
+LPR_POSTPROCESS_FUNCTION = "filter_letterbox"
+LPR_VIDEO_NAME = "lpr.mp4"
+LPR_DB_DIR_NAME = "lpr_db"
+LPR_CAPTURED_VEHICLES_DIR_NAME = "captured_vehicles"
+LPR_DIR_NAME = "license_plate_recognition"
+
 # Depth pipeline defaults
 DEPTH_APP_TITLE = "Hailo Depth App"
 DEPTH_PIPELINE = "depth"
