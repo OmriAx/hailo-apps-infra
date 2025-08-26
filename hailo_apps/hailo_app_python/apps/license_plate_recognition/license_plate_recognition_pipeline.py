@@ -93,7 +93,7 @@ class GstreamerLPRApp(GStreamerApp):
         )
 
         vehicle_tracker_pipeline = TRACKER_PIPELINE(
-            class_id=2  # Assuming class_id 2 is for vehicles
+            class_id=-1  # Assuming class_id 2 is for vehicles
         )
 
         ocr_detection_pipeline = INFERENCE_PIPELINE(

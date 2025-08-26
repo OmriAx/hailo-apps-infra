@@ -329,3 +329,45 @@ std::vector<HailoROIPtr> person_attributes(std::shared_ptr<HailoMat> image, Hail
 {
     return person_crop(image, roi, true);
 }
+
+
+extern "C"  
+std::vector<HailoROIPtr> crop_vehicles(std::shared_ptr<HailoMat> /*image*/,  
+                                       HailoROIPtr roi,  
+                                       bool use_letterbox,  
+                                       bool /*no_scaling_bbox*/,  
+                                       bool /*internal_offset*/,  
+                                       const std::string &/*resize_method*/)  
+{  
+    std::vector<HailoROIPtr> crops;  
+  
+    // Extract all detections attached to this ROI.  
+    auto detections = hailo_common::get_hailo_detections(roi);  
+    for (auto &det : detections) {  
+        // Only process vehicle detections (assuming yolov5m_vehicles labels vehicles as "car", "truck", "bus", etc.)  
+        // You may need to adjust these labels based on your specific vehicle model's output  
+        std::string label = det->get_label();  
+        if (label != "car" && label != "truck" && label != "bus" &&   
+            label != "motorcycle" && label != "bicycle") {  
+            continue;  
+        }  
+  
+        // Copy the bounding box; undo letterboxing if requested.  
+        HailoBBox bbox = det->get_bbox();  
+        if (use_letterbox) {  
+            bbox = hailo_common::create_flattened_bbox(bbox, roi->get_scaling_bbox());  
+        }  
+  
+        // Create a new ROI covering this detection.  
+        HailoROIPtr new_roi = std::make_shared<HailoROI>(bbox);  
+  
+        // Add a single detection by value.  
+        std::vector<HailoDetection> outs;  
+        outs.emplace_back(bbox, label, det->get_confidence());  
+        hailo_common::add_detections(new_roi, outs);  
+  
+        crops.emplace_back(new_roi);  
+    }  
+  
+    return crops;  
+}

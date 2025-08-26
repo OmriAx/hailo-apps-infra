@@ -42,9 +42,9 @@ class GStreamerOCRApp(GStreamerApp):
         self.rec_hef_path = "/home/omri/dev/hailo-apps-infra/ocr.hef"
 
 
-        self.det_post_process_so = "/home/omri/dev/hailo-apps-infra/resources/so/libtest_postprocess.so"
+        self.det_post_process_so = "/home/omri/dev/hailo-apps-infra/resources/so/libocr_postprocess.so"
         self.det_post_function = "paddleocr_det"
-        self.rec_post_process_so = "/home/omri/dev/hailo-apps-infra/resources/so/libtest_postprocess.so"
+        self.rec_post_process_so = "/home/omri/dev/hailo-apps-infra/resources/so/libocr_postprocess.so"
         self.rec_post_function = "paddleocr_recognize"
         self.vehicle_post_process_so = "/home/omri/dev/hailo-apps-infra/resources/so/libyolo_hailortpp_postprocess.so"
         self.vehicle_post_process_function = "yolov5m_vehicles"
@@ -56,9 +56,9 @@ class GStreamerOCRApp(GStreamerApp):
        # self.video_source = "/home/omri/dev/hailo-apps-infra/istockphoto-1188451252-640_adpp_is.mp4"
         self.video_width = 640
         self.video_height = 640
-        self.batch_size = 1
+        self.batch_size = 2
 
-        self.video_source = "/home/omri/dev/hailo-apps-infra/test5.mp4"
+        self.video_source = "/home/omri/dev/hailo-apps-infra/test3.mp4"
         self.thresholds_str = "nms-score-threshold=0.3 nms-iou-threshold=0.45"  
         self.vehicle_labels_json = "/home/hailo/omria/hailo-apps-infra/resources/json/yolov5m_vehicles.json"
 
@@ -68,78 +68,82 @@ class GStreamerOCRApp(GStreamerApp):
         self.create_pipeline()
 
     def get_pipeline_string(self):  
+        # Source pipeline  
         source_pipeline = SOURCE_PIPELINE(  
             video_source=self.video_source,  
-            video_width=self.video_width,  
+            video_width=self.video_width,   
             video_height=self.video_height,  
-            frame_rate=self.frame_rate,  
+            frame_rate=self.frame_rate,   
             sync=self.sync)  
-    
-        # 1. Vehicle detection  
+        
+        # 1. Vehicle detection (yolov5m_vehicles)  
         vehicle_detection_pipeline = INFERENCE_PIPELINE(  
             hef_path=self.vehicle_hef_path,  
             post_process_so=self.vehicle_post_process_so,  
-            post_function_name=self.vehicle_post_process_function,  
+            post_function_name=self.vehicle_post_process_function, 
             batch_size=self.batch_size,  
-            additional_params=self.thresholds_str)  
-    
+            additional_params=self.thresholds_str,
+            )  
+        
         vehicle_detection_wrapper = INFERENCE_PIPELINE_WRAPPER(vehicle_detection_pipeline)  
-    
+        
         # 2. Vehicle tracker  
         vehicle_tracker_pipeline = TRACKER_PIPELINE(  
-            class_id=-1,  
+            class_id=-1,  # Track all vehicle classes  
             kalman_dist_thr=0.8,  
             iou_thr=0.9,  
             init_iou_thr=0.7,  
             keep_tracked_frames=15,  
             name='vehicle_tracker')  
-    
-        # 3. Text detection pipeline  
+        
+        # 3. Text detection pipeline (runs on vehicle crops)  
         text_detection_pipeline = INFERENCE_PIPELINE(  
             hef_path=self.det_hef_path,  
             post_process_so=self.det_post_process_so,  
-            post_function_name=self.det_post_function,  
+            post_function_name=self.det_post_function,  # Your detection function  
             batch_size=self.batch_size,  
             name='text_detection')  
-    
-        # 4. OCR recognition pipeline  
+        
+        # 4. OCR recognition pipeline (runs on text crops)  
         ocr_recognition_pipeline = INFERENCE_PIPELINE(  
             hef_path=self.rec_hef_path,  
             post_process_so=self.rec_post_process_so,  
             post_function_name=self.rec_post_function,  
             batch_size=self.batch_size,  
             name='ocr_recognition')  
-    
-        # 5. Combined text pipeline - this is the key change  
-        combined_text_pipeline = (  
-            f'{text_detection_pipeline} ! '  
-            f'hailofilter so-path={self.det_post_process_so} '  
-            f'function-name=crop_text_regions_filter name=text_crop_filter ! '  
-            f'{ocr_recognition_pipeline}'  
-        )
-    
-        # 6. Vehicle cropper with combined text pipeline  
+        
+        # First cropper: crop vehicles and run text detection  
         vehicle_cropper = CROPPER_PIPELINE(  
-            inner_pipeline=combined_text_pipeline,  
-            so_path=self.cropper_so_path,  
-            function_name=self.cropper_function,  
-            name='vehicle_cropper')  
-    
+            inner_pipeline=text_detection_pipeline,  
+            so_path=self.cropper_so_path,  # Use the correct variable  
+            function_name=self.cropper_function,
+            name='vehicle_cropper')  # Use the correct variable  
+        
+        # Second cropper: crop text regions and run OCR  
+        text_cropper = CROPPER_PIPELINE(  
+            inner_pipeline=ocr_recognition_pipeline,  
+            so_path=self.det_post_process_so,  # Your OCR post-process SO  
+            function_name="crop_text_regions",
+            name='text_cropper')  # Your existing function  
+        
         user_callback_pipeline = USER_CALLBACK_PIPELINE()  
         display_pipeline = DISPLAY_PIPELINE(  
-            video_sink=self.video_sink,  
-            sync=self.sync,  
+            video_sink=self.video_sink,   
+            sync=self.sync,   
             show_fps=self.show_fps)  
-    
+        
         pipeline_string = (  
             f'{source_pipeline} ! '  
             f'{vehicle_detection_wrapper} ! '  
             f'{vehicle_tracker_pipeline} ! '  
             f'{vehicle_cropper} ! '  
+            f'{text_cropper} ! '  
             f'{user_callback_pipeline} ! '  
             f'{display_pipeline}'  
         )  
-    
+        
+        print("Generated pipeline string:")  
+        print(pipeline_string)  # Add this debug line  
         return pipeline_string
 
 
