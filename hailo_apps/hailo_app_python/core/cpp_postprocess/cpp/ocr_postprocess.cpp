@@ -422,14 +422,14 @@ void paddleocr_recognize(HailoROIPtr roi, void *params_void_ptr) {
     std::cout << "DEBUG: Decoded text: '" << out_text << "' confidence: " << conf << std::endl;  
   
     // Create classification objects and attach to existing detections  
-    if (!out_text.empty() && out_text != " ") {    
+    if (!out_text.empty() && out_text != " ") {  
         // Get existing detections from the ROI  
-        auto detections = hailo_common::get_hailo_detections(roi);    
+        auto detections = hailo_common::get_hailo_detections(roi);  
         std::cout << "DEBUG: Found " << detections.size() << " detections to attach classification to" << std::endl;  
           
-        if (!detections.empty()) {    
+        if (!detections.empty()) {  
             // Add classification to the first detection  
-            auto classification = std::make_shared<HailoClassification>("license_plate", out_text, conf);    
+            auto classification = std::make_shared<HailoClassification>("license_plate", out_text, conf);  
             detections[0]->add_object(classification);  
             std::cout << "DEBUG: Added classification '" << out_text << "' to detection" << std::endl;  
         } else {  
@@ -472,4 +472,140 @@ void crop_text_regions_filter(HailoROIPtr roi, void *params_void_ptr) {
     }  
       
     std::cout << "DEBUG: Filtered to " << text_detections.size() << " text region detections" << std::endl;  
+}
+
+extern "C"
+std::vector<HailoROIPtr> crop_text_regions(std::shared_ptr<HailoMat> image,
+                                           HailoROIPtr roi,
+                                           bool use_letterbox,
+                                           bool no_scaling_bbox,
+                                           bool internal_offset,
+                                           const std::string &resize_method)
+{
+    std::cout << "DEBUG: crop_text_regions called as cropper function" << std::endl;
+
+    // 1) Gather detections
+    std::vector<HailoROIPtr> crop_rois;
+    std::vector<HailoDetectionPtr> detections = hailo_common::get_hailo_detections(roi);
+
+    // 2) Image size for pixel-based thresholds
+    const int img_w = image->width();
+    const int img_h = image->height();
+
+    // 3) Tunables (pixels)
+    constexpr int MAX_TEXT_REGIONS   = 8;   // match your batch size
+    constexpr float MIN_W_PX         = 8.0f;
+    constexpr float MIN_H_PX         = 4.0f;     // allow very thin lines
+    constexpr float TARGET_MIN_H_PX  = 12.0f;    // inflate to this if too thin
+    constexpr float PAD_X_PX         = 4.0f;     // small horizontal padding
+    constexpr float PAD_Y_PX         = 2.0f;     // small vertical padding
+
+    auto clamp01 = [](float v){ return std::max(0.0f, std::min(1.0f, v)); };
+
+    int count = 0;
+    for (auto &detection : detections) {
+        if (count >= MAX_TEXT_REGIONS) break;
+
+        const std::string label = detection->get_label();
+        if (label != "text_region") continue;
+
+        auto nb = detection->get_bbox(); // normalized box in [0,1] (assumption)
+        float nx = nb.xmin();
+        float ny = nb.ymin();
+        float nw = nb.width();
+        float nh = nb.height();
+
+        std::cout << "DEBUG: Processing detection with label: '" << label << "'\n";
+        std::cout << "DEBUG: Text region (normalized): w=" << nw << " h=" << nh
+                  << " x=" << nx << " y=" << ny << std::endl;
+
+        // 4) If frames were letterboxed, undo letterbox *before* pixel conversion
+        //    (Replace this block with your project’s actual de-letterbox helper if you have one)
+        if (use_letterbox) {
+            // Example heuristic de-letterbox for 16:9 input letterboxed into a square model, etc.
+            // If you have model-input W,H and padding meta in ROI, use that instead of guessing.
+            // Here we assume nb is in the letterboxed domain and map it back to the raw image.
+            // Remove this if your pipeline already writes non-letterboxed boxes.
+            float img_aspect = static_cast<float>(img_w) / img_h;
+
+            // Assume model input is square; letterbox on vertical for wide images:
+            // scale so that the *short* side fits, then compute paddings.
+            float scale = 1.0f;
+            float pad_x = 0.0f;
+            float pad_y = 0.0f;
+
+            if (img_aspect >= 1.0f) {
+                // wide image: height matched, horizontal pad
+                scale = 1.0f / img_aspect;
+                pad_x = (1.0f - scale) * 0.5f;
+                // pad_y = 0
+            } else {
+                // tall image: width matched, vertical pad
+                scale = img_aspect;
+                pad_y = (1.0f - scale) * 0.5f;
+                // pad_x = 0
+            }
+
+            // Remove padding + rescale back to full image norm
+            float x0 = clamp01((nx - pad_x) / scale);
+            float y0 = clamp01((ny - pad_y) / scale);
+            float x1 = clamp01((nx + nw - pad_x) / scale);
+            float y1 = clamp01((ny + nh - pad_y) / scale);
+
+            nx = x0; ny = y0; nw = std::max(0.0f, x1 - x0); nh = std::max(0.0f, y1 - y0);
+            std::cout << "DEBUG: De-letterboxed (normalized): w=" << nw << " h=" << nh
+                      << " x=" << nx << " y=" << ny << std::endl;
+        }
+
+        // 5) Convert to pixels
+        float w_px = nw * img_w;
+        float h_px = nh * img_h;
+
+        std::cout << "DEBUG: Text region (pixels): w=" << w_px << " h=" << h_px
+                  << " x=" << nx * img_w << " y=" << ny * img_h << std::endl;
+
+        // 6) Size check in pixels
+        if (w_px < MIN_W_PX || h_px < MIN_H_PX) {
+            std::cout << "DEBUG: Skipping text_region (too small in px) "
+                         "[min_w=" << MIN_W_PX << ", min_h=" << MIN_H_PX << "]" << std::endl;
+            continue;
+        }
+
+        // 7) Inflate very thin text lines to a minimum pixel height (helps OCR crops)
+        if (h_px < TARGET_MIN_H_PX) {
+            float center_y = ny + nh * 0.5f;
+            float new_h_n  = TARGET_MIN_H_PX / img_h;
+            float new_y    = center_y - new_h_n * 0.5f;
+
+            ny = clamp01(new_y);
+            nh = std::min(1.0f - ny, new_h_n); // clamp if we shifted near the bottom
+
+            // Recompute pixel height (for logs)
+            h_px = nh * img_h;
+            std::cout << "DEBUG: Inflated thin text box to h_px=" << h_px << " (target "
+                      << TARGET_MIN_H_PX << " px)" << std::endl;
+        }
+
+        // 8) Add a little padding
+        float pad_x_n = PAD_X_PX / img_w;
+        float pad_y_n = PAD_Y_PX / img_h;
+
+        float x0 = clamp01(nx - pad_x_n);
+        float y0 = clamp01(ny - pad_y_n);
+        float x1 = clamp01(nx + nw + pad_x_n);
+        float y1 = clamp01(ny + nh + pad_y_n);
+
+        // 9) Write back to detection bbox (normalized), or clone to a new ROI if you prefer
+        //    If your cropper expects ROIs, you can create child-ROIs from `roi` using these coords.
+        detection->set_bbox(HailoBBox(x0, y0, std::max(0.0f, x1 - x0), std::max(0.0f, y1 - y0)));
+
+        std::cout << "DEBUG: Accepted text_region crop [x0=" << x0 << ", y0=" << y0
+                  << ", x1=" << x1 << ", y1=" << y1 << "]" << std::endl;
+
+        crop_rois.push_back(detection);
+        ++count;
+    }
+
+    std::cout << "DEBUG: Returning " << crop_rois.size() << " text regions for cropping" << std::endl;
+    return crop_rois;
 }

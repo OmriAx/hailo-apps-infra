@@ -53,6 +53,10 @@ class GstreamerLPRApp(GStreamerApp):
             LPR_VEHICLE_HEF_NAME, RESOURCES_MODELS_DIR_NAME
         )
         self.vehicle_post_process_function = LPR_VEHICLE_POSTPROCESS_FUNCTION
+        self.vehicle_post_process_so = get_resource_path(
+            DETECTION_PIPELINE, RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME
+        )
+        
 
         self.text_detector_hef_path = get_resource_path(
             LPR_TEXT_DET_MODEL_NAME, RESOURCES_MODELS_DIR_NAME
@@ -80,55 +84,81 @@ class GstreamerLPRApp(GStreamerApp):
 
         self.create_pipeline()
     
-    def get_pipeline_string(self):
-        source_pipeline = SOURCE_PIPELINE(video_source=self.video_source,
-                                          video_width=self.video_width, video_height=self.video_height,
-                                          frame_rate=self.frame_rate, sync=self.sync)
-        vehicle_detection_pipeline = INFERENCE_PIPELINE(
-            hef_path=self.vehicle_hef_path,
-            post_process_so=self.post_process_so,
-            post_function_name=self.vehicle_post_process_function,
-            batch_size=self.batch_size,
-            thresholds_str=self.thresholds_str
-        )
-
-        vehicle_tracker_pipeline = TRACKER_PIPELINE(
-            class_id=-1  # Assuming class_id 2 is for vehicles
-        )
-
-        ocr_detection_pipeline = INFERENCE_PIPELINE(
-            hef_path=self.text_detector_hef_path,
-            post_process_so=self.post_process_so,
-            post_function_name=self.text_detector_post_process_function,
-            batch_size=self.batch_size
-        )
-
-        ocr_pipeline = INFERENCE_PIPELINE(
-            hef_path=self.ocr_hef_path,
-            post_process_so=self.post_process_so,
-            post_function_name=self.ocr_post_process_function,
-            batch_size=self.batch_size
-        )
-
-        combined_ocr_pipeline = f"{ocr_detection_pipeline} ! {ocr_pipeline}"  
-
-        cropping_pipeline = CROPPER_PIPELINE(
-            inner_pipeline=combined_ocr_pipeline,
-            so_path=self.post_process_so,
-            function_name="conditional_vehicle_crop" ,
-        )
-
-        user_callback_pipeline = USER_CALLBACK_PIPELINE()
-        display_pipeline = DISPLAY_PIPELINE(video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps)
-
-        pipeline_string = (
-            f'{source_pipeline} ! '
-            f'{vehicle_detection_pipeline} ! '
-            f'{vehicle_tracker_pipeline} ! '
-            f'{cropping_pipeline} ! '
-            f'{user_callback_pipeline} ! '
-            f'{display_pipeline}'
-        )
-
-        print(pipeline_string)
+    def get_pipeline_string(self):  
+        # Source pipeline  
+        source_pipeline = SOURCE_PIPELINE(  
+            video_source=self.video_source,  
+            video_width=self.video_width,   
+            video_height=self.video_height,  
+            frame_rate=self.frame_rate,   
+            sync=self.sync)  
+        
+        # 1. Vehicle detection (yolov5m_vehicles)  
+        vehicle_detection_pipeline = INFERENCE_PIPELINE(  
+            hef_path=self.vehicle_hef_path,  
+            post_process_so=self.vehicle_post_process_so,  
+            post_function_name=self.vehicle_post_process_function, 
+            batch_size=self.batch_size,  
+            additional_params=self.thresholds_str,
+            )  
+        
+        vehicle_detection_wrapper = INFERENCE_PIPELINE_WRAPPER(vehicle_detection_pipeline)  
+        
+        # 2. Vehicle tracker  
+        vehicle_tracker_pipeline = TRACKER_PIPELINE(  
+            class_id=-1,  # Track all vehicle classes  
+            kalman_dist_thr=0.8,  
+            iou_thr=0.9,  
+            init_iou_thr=0.7,  
+            keep_tracked_frames=15,  
+            name='vehicle_tracker')  
+        
+        # 3. Text detection pipeline (runs on vehicle crops)  
+        text_detection_pipeline = INFERENCE_PIPELINE(  
+            hef_path=self.det_hef_path,  
+            post_process_so=self.det_post_process_so,  
+            post_function_name=self.det_post_function,  # Your detection function  
+            batch_size=self.batch_size,  
+            name='text_detection')  
+        
+        # 4. OCR recognition pipeline (runs on text crops)  
+        ocr_recognition_pipeline = INFERENCE_PIPELINE(  
+            hef_path=self.rec_hef_path,  
+            post_process_so=self.rec_post_process_so,  
+            post_function_name=self.rec_post_function,  
+            batch_size=self.batch_size,  
+            name='ocr_recognition')  
+        
+        # First cropper: crop vehicles and run text detection  
+        vehicle_cropper = CROPPER_PIPELINE(  
+            inner_pipeline=text_detection_pipeline,  
+            so_path=self.cropper_so_path,  # Use the correct variable  
+            function_name=self.cropper_function,
+            name='vehicle_cropper')  # Use the correct variable  
+        
+        # Second cropper: crop text regions and run OCR  
+        text_cropper = CROPPER_PIPELINE(  
+            inner_pipeline=ocr_recognition_pipeline,  
+            so_path=self.det_post_process_so,  # Your OCR post-process SO  
+            function_name="crop_text_regions",
+            name='text_cropper')  # Your existing function  
+        
+        user_callback_pipeline = USER_CALLBACK_PIPELINE()  
+        display_pipeline = DISPLAY_PIPELINE(  
+            video_sink=self.video_sink,   
+            sync=self.sync,   
+            show_fps=self.show_fps)  
+        
+        pipeline_string = (  
+            f'{source_pipeline} ! '  
+            f'{vehicle_detection_wrapper} ! '  
+            f'{vehicle_tracker_pipeline} ! '  
+            f'{vehicle_cropper} ! '  
+            f'{text_cropper} ! '  
+            f'{user_callback_pipeline} ! '  
+            f'{display_pipeline}'  
+        )  
+        
+        print("Generated pipeline string:")  
+        print(pipeline_string)  # Add this debug line  
         return pipeline_string

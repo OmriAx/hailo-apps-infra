@@ -58,7 +58,7 @@ class GStreamerOCRApp(GStreamerApp):
         self.video_height = 640
         self.batch_size = 1
 
-        self.video_source = "/home/omri/dev/hailo-apps-infra/test5.mp4"
+        self.video_source = "/home/omri/dev/hailo-apps-infra/test3.mp4"
         self.thresholds_str = "nms-score-threshold=0.3 nms-iou-threshold=0.45"  
         self.vehicle_labels_json = "/home/hailo/omria/hailo-apps-infra/resources/json/yolov5m_vehicles.json"
 
@@ -139,6 +139,8 @@ class GStreamerOCRApp(GStreamerApp):
             f'{user_callback_pipeline} ! '  
             f'{display_pipeline}'  
         )  
+        print("GStreamer pipeline:")
+        print(pipeline_string)
     
         return pipeline_string
 

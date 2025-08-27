@@ -47,12 +47,12 @@ void paddleocr_det(HailoROIPtr roi, void *params_void_ptr);
 void paddleocr_recognize(HailoROIPtr roi, void *params_void_ptr);  
   
 // Cropping function for text regions  
-std::vector<HailoROIPtr> crop_text_regions(std::shared_ptr<HailoMat> image,  
-                                           HailoROIPtr roi,  
-                                           bool use_letterbox,  
-                                           bool no_scaling_bbox,  
-                                           bool internal_offset,  
-                                           const std::string &resize_method);  
+std::vector<HailoROIPtr> crop_text_regions(std::shared_ptr<HailoMat> image,
+                                           HailoROIPtr roi,
+                                           bool use_letterbox,
+                                           bool no_scaling_bbox,
+                                           bool internal_offset,
+                                           const std::string &resize_method); 
 
 void crop_text_regions_filter(HailoROIPtr roi, void *params_void_ptr);  
 

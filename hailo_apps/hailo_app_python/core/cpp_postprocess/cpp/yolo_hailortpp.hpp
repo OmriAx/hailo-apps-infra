@@ -37,4 +37,6 @@ void yolov5s_personface_rgb(HailoROIPtr roi);
 void yolov5_no_persons(HailoROIPtr roi);
 void yolov5m_vehicles(HailoROIPtr roi);
 void yolov5m_vehicles_nv12(HailoROIPtr roi);
+void yolov5m_vehicles_optimized(HailoROIPtr roi, void *params_void_ptr);
+void yolov5m_vehicles_with_image_saving(HailoROIPtr roi, void *params_void_ptr) ;
 __END_DECLS

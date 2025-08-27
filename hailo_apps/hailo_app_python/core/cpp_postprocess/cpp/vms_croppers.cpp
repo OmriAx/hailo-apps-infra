@@ -371,3 +371,48 @@ std::vector<HailoROIPtr> crop_vehicles(std::shared_ptr<HailoMat> /*image*/,
   
     return crops;  
 }
+
+extern "C"  
+std::vector<HailoROIPtr> crop_top_8_vehicles(std::shared_ptr<HailoMat> image,  
+                                              HailoROIPtr roi,  
+                                              bool use_letterbox,  
+                                              bool no_scaling_bbox,  
+                                              bool internal_offset,  
+                                              const std::string &resize_method) {  
+    std::cout << "DEBUG: crop_top_8_vehicles called" << std::endl;  
+      
+    std::vector<HailoROIPtr> crop_rois;  
+    std::vector<HailoDetectionPtr> detections = hailo_common::get_hailo_detections(roi);  
+      
+    // Filter for car detections only  
+    std::vector<HailoDetectionPtr> car_detections;  
+    for (auto detection : detections) {  
+        if (detection->get_label() == "car") {  
+            car_detections.push_back(detection);  
+        }  
+    }  
+      
+    // Sort by confidence (highest first)  
+    std::sort(car_detections.begin(), car_detections.end(),   
+              [](const HailoDetectionPtr &a, const HailoDetectionPtr &b) {  
+                  return a->get_confidence() > b->get_confidence();  
+              });  
+      
+    // Take top 8 with minimum confidence threshold  
+    const float MIN_CONFIDENCE = 0.5f;  
+    const int MAX_VEHICLES = 8;  
+      
+    int count = 0;  
+    for (auto detection : car_detections) {  
+        if (count >= MAX_VEHICLES) break;  
+        if (detection->get_confidence() >= MIN_CONFIDENCE) {  
+            crop_rois.push_back(detection);  
+            count++;  
+            std::cout << "DEBUG: Selected vehicle " << count << " with confidence: "   
+                      << detection->get_confidence() << std::endl;  
+        }  
+    }  
+      
+    std::cout << "DEBUG: Returning " << crop_rois.size() << " top vehicles for OCR processing" << std::endl;  
+    return crop_rois;  
+}

@@ -169,6 +169,43 @@ void yolov5m_vehicles(HailoROIPtr roi)
     hailo_common::add_detections(roi, detections);
 }
 
+extern "C"  
+void yolov5m_vehicles_optimized(HailoROIPtr roi, void *params_void_ptr) {  
+    if (!roi->has_tensors()) {  
+        return;  
+    }  
+      
+    // Use existing YOLO post-processing  
+    auto post = HailoNMSDecode(roi->get_tensor(DEFAULT_YOLOV5M_VEHICLES_OUTPUT_LAYER), yolo_vehicles_labels);  
+    auto detections = post.decode<float32_t, common::hailo_bbox_float32_t>();  
+      
+    // Sort detections by confidence (highest first)  
+    std::sort(detections.begin(), detections.end(),   
+              []( HailoDetection &a,  HailoDetection &b) {  
+                  return a.get_confidence() > b.get_confidence();  
+              });  
+      
+    // Limit to top detections and apply confidence threshold  
+    const float MIN_CONFIDENCE = 0.3f;  // Match your threshold  
+    const int MAX_DETECTIONS = 10;      // Slightly more than 8 to account for tracking  
+      
+    std::vector<HailoDetection> filtered_detections;  
+    int count = 0;  
+    for (auto& detection : detections) {  
+        if (count >= MAX_DETECTIONS) break;  
+        if (detection.get_confidence() >= MIN_CONFIDENCE) {  
+            filtered_detections.push_back(detection);  
+            count++;  
+        }  
+    }  
+      
+    std::cout << "DEBUG: Filtered to " << filtered_detections.size()   
+              << " high-confidence vehicles from " << detections.size()   
+              << " total detections" << std::endl;  
+      
+    hailo_common::add_detections(roi, filtered_detections);  
+}
+
 
 void yolov5m_vehicles_nv12(HailoROIPtr roi)
 {
@@ -272,4 +309,46 @@ void filter_letterbox(HailoROIPtr roi, void *params_void_ptr)
     // Clear the scaling bbox of main roi because all detections are fixed.
     roi->clear_scaling_bbox();
 
+}
+
+extern "C"  
+void yolov5m_vehicles_with_image_saving(HailoROIPtr roi, void *params_void_ptr)  
+{  
+    if (!roi->has_tensors())  
+    {  
+        return;  
+    }  
+      
+    // Use the existing NMS decode pattern  
+    auto post = HailoNMSDecode(roi->get_tensor(DEFAULT_YOLOV5M_VEHICLES_OUTPUT_LAYER), yolo_vehicles_labels);  
+    auto detections = post.decode<float32_t, common::hailo_bbox_float32_t>();  
+      
+    // Sort detections by confidence (highest first)  
+    std::sort(detections.begin(), detections.end(),   
+              [](HailoDetection &a, HailoDetection &b) {  
+                  return a.get_confidence() > b.get_confidence();  
+              });  
+      
+    // Apply basic confidence filtering  
+    const float MIN_CONFIDENCE = 0.3f;  
+    std::vector<HailoDetection> filtered_detections;  
+      
+    for (auto& detection : detections) {  
+        if (detection.get_confidence() >= MIN_CONFIDENCE) {  
+            filtered_detections.push_back(detection);  
+        }  
+    }  
+      
+    // Mark top 4 for image saving by adding a special classification  
+    for (int i = 0; i < std::min(4, (int)filtered_detections.size()); i++) {  
+        auto save_classification = std::make_shared<HailoClassification>("save_for_ocr", "candidate", 1.0f);  
+        filtered_detections[i].add_object(save_classification);  
+    }  
+      
+    std::cout << "DEBUG: Vehicle detection - Total: " << detections.size()   
+              << " Filtered: " << filtered_detections.size()   
+              << " Top 4 marked for saving" << std::endl;  
+      
+    // Add ALL filtered detections to ROI (for display)  
+    hailo_common::add_detections(roi, filtered_detections);  
 }

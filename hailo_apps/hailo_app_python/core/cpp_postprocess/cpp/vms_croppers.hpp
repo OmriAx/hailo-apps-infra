@@ -19,6 +19,12 @@ std::vector<HailoROIPtr> crop_vehicles(std::shared_ptr<HailoMat> /*image*/,
                                        bool /*no_scaling_bbox*/,  
                                        bool /*internal_offset*/,  
                                        const std::string &/*resize_method*/);
+std::vector<HailoROIPtr> crop_top_8_vehicles(std::shared_ptr<HailoMat> image,  
+                                              HailoROIPtr roi,  
+                                              bool use_letterbox,  
+                                              bool no_scaling_bbox,  
+                                              bool internal_offset,  
+                                              const std::string &resize_method);                                       
 
 
 __END_DECLS

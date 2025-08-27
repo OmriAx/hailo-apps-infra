@@ -52,7 +52,7 @@ class GStreamerDetectionApp(GStreamerApp):
             self.arch = self.options_menu.arch
 
         if self.options_menu.input is None:  # Setting up a new application-specific default video (overrides the default video set in the GStreamerApp constructor)
-            self.video_source = "/home/omri/dev/hailo-apps-infra/lpr_test.mp4"
+            self.video_source = "/home/omri/dev/hailo-apps-infra/test1.mp4"
         if self.options_menu.hef_path is not None:
             self.hef_path = self.options_menu.hef_path
         else:
@@ -69,6 +69,10 @@ class GStreamerDetectionApp(GStreamerApp):
         self.app_callback = app_callback
         
         self.thresholds_str = "output-format-type=HAILO_FORMAT_TYPE_FLOAT32"
+
+        self.video_height = 640
+        self.video_width = 640
+        self.frame_rate = 15
 
 
         # Set the process title

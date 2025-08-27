@@ -37,7 +37,7 @@ class GStreamerOCRApp(GStreamerApp):
 
 
         # override the video source and dimensions to match the detector input (960×544)
-        self.video_source = "/home/omri/dev/hailo-apps-infra/istockphoto-1188452121-640_adpp_is.mp4"
+        self.video_source = "/home/omri/dev/hailo-apps-infra/test1.mp4"
         self.video_width = 960
         self.video_height = 544
 
