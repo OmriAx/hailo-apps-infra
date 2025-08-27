@@ -109,33 +109,33 @@ class user_app_callback_class:
     def set_frame(self, frame):
         pass  # implement if you need to display frames
 
-def app_callback(pad, info, user_data):
-    buffer = info.get_buffer()
-    if buffer is None:
-        return Gst.PadProbeReturn.OK
+def app_callback(pad, info, user_data):  
+    print("In app callback")
+    buffer = info.get_buffer()  
+    if buffer is None:  
+        return Gst.PadProbeReturn.OK  
+  
+    user_data.increment()  
+      
+    # Get the ROI from buffer  
+    roi = hailo.get_roi_from_buffer(buffer)  
+      
+    # Get detections (text regions)  
+    detections = roi.get_objects_typed(hailo.HAILO_DETECTION)  
+      
+    for detection in detections:  
+        # Each detection may have classification results (OCR text)  
+        classifications = detection.get_objects_typed(hailo.HAILO_CLASSIFICATION)  
+        for classification in classifications:  
+            text = classification.get_label()  # The recognized text  
+            confidence = classification.get_confidence()  
+            print(f"Recognized text: {text} (confidence: {confidence:.2f})")  
+              
+            # Write to file as in your original code  
+            with open("ocr_results.txt", "a") as f:  
+                f.write(text + "\n")  
 
-    user_data.increment()
-
-    # Retrieve ROI metadata from the buffer
-    roi = hailo.get_roi_from_buffer(buffer)
-    if roi:
-        # Get all detection objects (bounding boxes)
-        detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
-        for det in detections:
-            # Each detection may have classification results attached;
-            # iterate over them and extract the recognised string
-            classifications = det.get_objects_typed(hailo.HAILO_CLASSIFICATION)
-            for cls in classifications:
-                try:
-                    text = cls.get_label()  # the recognised string
-                    user_data.results.append(text)
-                    print(f"Recognised text: {text}")
-                    with open("ocr_results.txt", "a") as f:
-                        f.write(text + "\n")
-                except Exception:
-                    # if the object doesn't expose a label, skip it
-                    continue
-
+    print(f"Processed frame count: {user_data.get_count()}") 
     return Gst.PadProbeReturn.OK
 
 if __name__ == "__main__":

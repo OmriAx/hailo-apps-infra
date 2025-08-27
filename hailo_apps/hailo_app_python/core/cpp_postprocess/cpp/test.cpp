@@ -29,7 +29,8 @@ void filter_ocr(HailoROIPtr roi) {
 //     crop_text_regions(roi, nullptr);
 // }
   
-void db_postprocess(HailoROIPtr roi, void *params) {  
+void db_postprocess(HailoROIPtr roi, void *params) {
+    std::cout << "DB postprocess called" << std::endl;   
     if (!roi->has_tensors()) {  
         return;  
     }  
@@ -243,33 +244,50 @@ std::vector<cv::Point2f> unclip_polygon(const std::vector<cv::Point2f>& box, flo
 }
 
 void ocr_postprocess(HailoROIPtr roi, void *params) {  
+    std::cout << "OCR postprocess called" << std::endl;  
+      
     if (!roi->has_tensors()) {  
+        std::cout << "No tensors found in ROI" << std::endl;  
         return;  
     }  
   
     std::vector<HailoTensorPtr> tensors = roi->get_tensors();  
     if (tensors.empty()) {  
+        std::cout << "No tensors available" << std::endl;  
         return;  
     }  
   
     HailoTensorPtr tensor = tensors[0]; // OCR output tensor  
     auto shape = tensor->shape();  
       
-    // Assuming tensor shape is [sequence_length, num_classes] or [batch, sequence_length, num_classes]  
+    std::cout << "Tensor shape: ";  
+    for (size_t i = 0; i < shape.size(); i++) {  
+        std::cout << shape[i] << " ";  
+    }  
+    std::cout << std::endl;  
+      
+    // Determine tensor dimensions  
     int sequence_length, num_classes;  
     if (shape.size() == 3) {  
-        // Batch dimension present  
+        // Batch dimension present: [batch, sequence_length, num_classes]  
         sequence_length = shape[1];  
         num_classes = shape[2];  
-    } else {  
-        // No batch dimension  
+    } else if (shape.size() == 2) {  
+        // No batch dimension: [sequence_length, num_classes]  
         sequence_length = shape[0];  
         num_classes = shape[1];  
+    } else {  
+        std::cout << "Unexpected tensor shape size: " << shape.size() << std::endl;  
+        return;  
     }  
+  
+    std::cout << "Sequence length: " << sequence_length << ", Num classes: " << num_classes << std::endl;  
   
     // Dequantize tensor data  
     float qp_scale = tensor->quant_info().qp_scale;  
     float qp_zp = tensor->quant_info().qp_zp;  
+      
+    std::cout << "Quantization - Scale: " << qp_scale << ", Zero point: " << qp_zp << std::endl;  
       
     std::vector<float> dequantized_data(sequence_length * num_classes);  
     uint8_t* tensor_data = reinterpret_cast<uint8_t*>(tensor->data());  
@@ -281,23 +299,59 @@ void ocr_postprocess(HailoROIPtr roi, void *params) {
     // Decode the OCR output  
     OCRResult result = decode_ocr_output(dequantized_data.data(), sequence_length, num_classes);  
       
-    // Create a classification object with the decoded text  
-    hailo_common::add_classification(roi, "text", result.text, result.confidence);
-
-}  
+    std::cout << "Decoded text: '" << result.text << "' with confidence: " << result.confidence << std::endl;  
+  
+    // Get detection objects from the detection stage (following cascaded pattern)  
+    auto detections = roi->get_objects_typed(HAILO_DETECTION);  
+    std::cout << "Found " << detections.size() << " detections" << std::endl;  
+      
+    if (!detections.empty()) {  
+        // Attach classification to the detection object (cascaded approach)  
+        auto detection = std::dynamic_pointer_cast<HailoDetection>(detections[0]);  
+        if (detection) {  
+            // Check if there's already a classification and replace if confidence is higher  
+            auto existing_classifications = detection->get_objects_typed(HAILO_CLASSIFICATION);  
+            bool should_add = true;  
+              
+            for (auto& existing_class : existing_classifications) {  
+                auto classification_ptr = std::dynamic_pointer_cast<HailoClassification>(existing_class);  
+                if (classification_ptr && classification_ptr->get_type() == HAILO_CLASSIFICATION) {
+                    if (classification_ptr->get_confidence() < result.confidence) {  
+                        // Remove existing classification with lower confidence  
+                        detection->remove_object(existing_class);  
+                        std::cout << "Removed existing classification with lower confidence" << std::endl;  
+                    } else {  
+                        should_add = false;  
+                        std::cout << "Keeping existing classification with higher confidence" << std::endl;  
+                    }  
+                    break;  
+                }  
+            }  
+              
+            if (should_add && !result.text.empty()) {  
+                auto classification = std::make_shared<HailoClassification>("text", result.text, result.confidence);  
+                detection->add_object(classification);  
+                std::cout << "Added classification '" << result.text << "' to detection with confidence " << result.confidence << std::endl;  
+            }  
+        }  
+    } else {  
+        std::cout << "No detections found to attach classification to" << std::endl;  
+    }  
+} 
   
 OCRResult decode_ocr_output(const float* logits, int sequence_length, int num_classes) {  
     std::vector<int> text_indices(sequence_length);  
     std::vector<float> text_probs(sequence_length);  
       
-    // Find argmax and max for each position in sequence  
+    // Find argmax and max probability for each position in sequence  
     for (int i = 0; i < sequence_length; i++) {  
         int max_idx = 0;  
         float max_val = logits[i * num_classes];  
           
         for (int j = 1; j < num_classes; j++) {  
-            if (logits[i * num_classes + j] > max_val) {  
-                max_val = logits[i * num_classes + j];  
+            float current_val = logits[i * num_classes + j];  
+            if (current_val > max_val) {  
+                max_val = current_val;  
                 max_idx = j;  
             }  
         }  
@@ -328,7 +382,7 @@ OCRResult decode_ocr_output(const float* logits, int sequence_length, int num_cl
     std::vector<float> conf_list;  
       
     for (int i = 0; i < sequence_length; i++) {  
-        if (selection[i] && text_indices[i] < CHARACTERS.size()) {  
+        if (selection[i] && text_indices[i] < static_cast<int>(CHARACTERS.size())) {  
             char_list.push_back(CHARACTERS[text_indices[i]]);  
             conf_list.push_back(text_probs[i]);  
         }  
@@ -337,7 +391,11 @@ OCRResult decode_ocr_output(const float* logits, int sequence_length, int num_cl
     // Calculate mean confidence  
     float mean_confidence = 0.0f;  
     if (!conf_list.empty()) {  
-        mean_confidence = std::accumulate(conf_list.begin(), conf_list.end(), 0.0f) / conf_list.size();  
+        float sum = 0.0f;  
+        for (float conf : conf_list) {  
+            sum += conf;  
+        }  
+        mean_confidence = sum / conf_list.size();  
     }  
       
     // Join characters to form text  
@@ -346,11 +404,14 @@ OCRResult decode_ocr_output(const float* logits, int sequence_length, int num_cl
         decoded_text += ch;  
     }  
       
+    std::cout << "CTC decoding: " << char_list.size() << " characters, confidence: " << mean_confidence << std::endl;  
+      
     return {decoded_text, mean_confidence};  
 }
 
 std::vector<HailoROIPtr> crop_text_regions(std::shared_ptr<HailoMat> image, HailoROIPtr roi)  
 {  
+        std::cout << "Crop Text Regoins postprocess called" << std::endl;  
     std::vector<HailoROIPtr> crop_rois;  
       
     // Get all text detections from the detection model  
