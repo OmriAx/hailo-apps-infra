@@ -91,7 +91,9 @@ class GStreamerDetectionApp(GStreamerApp):
         self.thresholds_str = "output-format-type=HAILO_FORMAT_TYPE_FLOAT32"  
   
         # Set the process title  
-        setproctitle.setproctitle(DETECTION_APP_TITLE)  
+        setproctitle.setproctitle(DETECTION_APP_TITLE)
+        self.video_width = 1920
+        self.video_height = 1080
   
         self.create_pipeline()  
   

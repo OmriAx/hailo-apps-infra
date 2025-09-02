@@ -70,8 +70,8 @@ class GStreamerDetectionApp(GStreamerApp):
         
         self.thresholds_str = "output-format-type=HAILO_FORMAT_TYPE_FLOAT32"
 
-        self.video_height = 640
-        self.video_width = 640
+        self.video_height = 1080
+        self.video_width = 1920
         self.frame_rate = 15
 
 

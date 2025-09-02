@@ -110,32 +110,28 @@ class user_app_callback_class:
         pass  # implement if you need to display frames
 
 def app_callback(pad, info, user_data):  
-    print("In app callback")
     buffer = info.get_buffer()  
     if buffer is None:  
         return Gst.PadProbeReturn.OK  
   
-    user_data.increment()  
-      
-    # Get the ROI from buffer  
     roi = hailo.get_roi_from_buffer(buffer)  
       
-    # Get detections (text regions)  
-    detections = roi.get_objects_typed(hailo.HAILO_DETECTION)  
+    # Check if the main ROI has classifications (from fallback)  
+    classifications = roi.get_objects_typed(hailo.HAILO_CLASSIFICATION)  
+    for classification in classifications:  
+        text = classification.get_label()  
+        confidence = classification.get_confidence()  
+        print(f"OCR Result: '{text}' (confidence: {confidence:.2f})")  
       
+    # Check detections within the ROI  
+    detections = roi.get_objects_typed(hailo.HAILO_DETECTION)  
     for detection in detections:  
-        # Each detection may have classification results (OCR text)  
         classifications = detection.get_objects_typed(hailo.HAILO_CLASSIFICATION)  
         for classification in classifications:  
-            text = classification.get_label()  # The recognized text  
+            text = classification.get_label()  
             confidence = classification.get_confidence()  
-            print(f"Recognized text: {text} (confidence: {confidence:.2f})")  
-              
-            # Write to file as in your original code  
-            with open("ocr_results.txt", "a") as f:  
-                f.write(text + "\n")  
-
-    print(f"Processed frame count: {user_data.get_count()}") 
+            print(f"OCR Result from detection: '{text}' (confidence: {confidence:.2f})")  
+      
     return Gst.PadProbeReturn.OK
 
 if __name__ == "__main__":

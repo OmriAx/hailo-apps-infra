@@ -172,6 +172,17 @@ LPR_DB_DIR_NAME = "lpr_db"
 LPR_CAPTURED_VEHICLES_DIR_NAME = "captured_vehicles"
 LPR_DIR_NAME = "license_plate_recognition"
 
+# OCR Pipeline defaults
+OCR_APP_TITLE = "Hailo OCR App"
+OCR_PIPELINE = "paddle_ocr"
+OCR_DET_MODEL_NAME = "ocr_det"
+OCR_DET_POSTPROCESS_FUNCTION = "paddleocr_det"
+OCR_REC_MODEL_NAME = "ocr"
+OCR_REC_POSTPROCESS_FUNCTION = "paddleocr_recognize"
+OCR_POSTPROCESS_SO_FILENAME = "libocr_postprocess.so"
+OCR_CROPPER_POSTPROCESS_FUNCTION = "crop_text_regions"
+OCR_VIDEO_NAME = "ocr.mp4"
+
 # Depth pipeline defaults
 DEPTH_APP_TITLE = "Hailo Depth App"
 DEPTH_PIPELINE = "depth"

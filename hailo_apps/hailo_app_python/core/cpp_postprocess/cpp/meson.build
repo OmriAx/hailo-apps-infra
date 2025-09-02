@@ -18,11 +18,17 @@ shared_library('yolo_hailortpp_postprocess',
 ################################################
 
 test_sources = [
-    'test.cpp'
+    'test.cpp',
+    '../third_party/clipper2/src/clipper.engine.cpp',
+    '../third_party/clipper2/src/clipper.offset.cpp',
+    '../third_party/clipper2/src/clipper.rectclip.cpp'
 ]
 shared_library('test_postprocess',
     test_sources,
-    include_directories : rapidjson_inc,  
+    include_directories : [
+        rapidjson_inc,
+        include_directories('../third_party/clipper2/include')
+    ],
     dependencies : postprocess_dep,
     gnu_symbol_visibility : 'default',
     install: true,

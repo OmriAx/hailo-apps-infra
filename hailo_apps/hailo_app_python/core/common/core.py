@@ -44,6 +44,7 @@ from .defines import (
     RESOURCES_VIDEOS_DIR_NAME,
     SIMPLE_DETECTION_MODEL_NAME,
     SIMPLE_DETECTION_PIPELINE,
+    OCR_PIPELINE,
 )
 from .hailo_logger import get_logger
 from .installation_utils import detect_hailo_arch
@@ -168,10 +169,10 @@ def get_resource_path(
     if resource_type == MULTI_SOURCE_DIR_NAME and model:
         return (root / MULTI_SOURCE_DIR_NAME / model)
     if resource_type == DEFAULT_LOCAL_RESOURCES_PATH and model:
-        
         return (root / DEFAULT_LOCAL_RESOURCES_PATH / model)
     if resource_type == LPR_DIR_NAME and model:
         return (root / LPR_DIR_NAME / model)
+    
 
 
     if resource_type == RESOURCES_MODELS_DIR_NAME:
