@@ -31,13 +31,12 @@ class GStreamerOCRApp(GStreamerApp):
 
         # model and post–processing paths
         self.det_hef_path = "/home/omri/dev/hailo-apps-infra/ocr_det.hef"
-        self.rec_hef_path = "/home/omri/dev/hailo-apps-infra/ocr.hef"
-        self.det_post_process_so = "/home/omri/dev/hailo-apps-infra/resources/so/libtest_postprocess.so"
-        self.det_post_function = "filter_letterbox"
+        self.det_post_process_so = "/home/omri/dev/hailo-apps-infra/resources/so/libocr_postprocess.so"
+        self.det_post_function = "paddleocr_det"
 
 
         # override the video source and dimensions to match the detector input (960×544)
-        self.video_source = "/home/omri/dev/hailo-apps-infra/test1.mp4"
+        self.video_source = "/home/omri/dev/hailo-apps-infra/slideshow.mp4"
         self.video_width = 960
         self.video_height = 544
 

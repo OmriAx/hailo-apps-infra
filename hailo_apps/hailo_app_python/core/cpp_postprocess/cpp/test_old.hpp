@@ -1,27 +1,46 @@
 #pragma once  
 #include "hailo_objects.hpp"  
 #include "hailo_common.hpp"  
-#include <opencv2/opencv.hpp>  
+#include "vms_croppers.hpp" 
+
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
 #include <vector>  
 #include <string>  
   
-// Character vocabulary for CTC decoding  
+__BEGIN_DECLS
+void filter_db(HailoROIPtr roi);  
+void filter_ocr(HailoROIPtr roi);
+void ocr_postprocess(HailoROIPtr roi, void *params);
+void db_postprocess(HailoROIPtr roi, void *params);
+std::vector<HailoROIPtr> crop_text_regions(std::shared_ptr<HailoMat> image, HailoROIPtr roi) ;  
+
+  
+// Character set for OCR recognition  
 extern const std::vector<std::string> CHARACTERS;  
   
-struct OcrParams {  
-    float det_bin_thresh = 0.3;  
-    float det_box_thresh = 0.6;  
-    float det_unclip_ratio = 1.5;  
-    int det_max_candidates = 1000;  
-    std::string det_output_name = "output";  
-    int det_map_h = 640;  
-    int det_map_w = 640;  
+struct OCRResult {  
+    std::string text;  
+    float confidence;  
 };  
- 
-__BEGIN_DECLS  
-void paddleocr_det(HailoROIPtr roi, void *params_void_ptr);  
-void paddleocr_recognize(HailoROIPtr roi, void *params_void_ptr);  
-void crop_text_regions_filter(HailoROIPtr roi, void *params_void_ptr);  // Add this line  
-std::vector<HailoDetection> db_postprocess(cv::Mat heatmap, cv::Mat orig_img, OcrParams *params);  
-std::string ctc_decode(const std::vector<std::vector<float>>& logits);  
-__END_DECLS
+  
+OCRResult decode_ocr_output(const float* logits, int sequence_length, int num_classes);
+  
+struct DBParams {  
+    float thresh = 0.3f;  
+    float box_thresh = 0.7f;  
+    int max_candidates = 1000;  
+    float unclip_ratio = 2.0f;  
+    int min_size = 3;  
+    bool use_dilation = false;  
+    std::string score_mode = "fast";  
+    std::string box_type = "quad";  
+};  
+  
+// Helper functions  
+std::vector<cv::Point2f> get_mini_boxes(const std::vector<cv::Point>& contour, float& min_side);  
+float box_score_fast(const cv::Mat& bitmap, const std::vector<cv::Point2f>& box);  
+std::vector<cv::Point2f> unclip_polygon(const std::vector<cv::Point2f>& box, float unclip_ratio);
+HailoBBox adjust_text_bbox(const HailoBBox &bbox, float padding_ratio = 0.1f);
+HailoDetectionPtr clone_detection_for_ocr(HailoDetectionPtr detection);
+__END_DECLS  

@@ -14,14 +14,14 @@
 // OCR Parameters structure  
 struct OcrParams {  
     // Detection parameters  
-    float det_bin_thresh = 0.2f;  
-    float det_box_thresh = 0.3f;  
-    float det_unclip_ratio = 2.0f;  
-    int det_max_candidates = 1000;  
+    float det_bin_thresh = 0.3f;  
+    float det_box_thresh = 0.15f;  
+    float det_unclip_ratio = 3.0f;  
+    int det_max_candidates = 100;  
     float det_min_box_size = 1.0f;  
     std::string det_output_name = "";  
-    int det_map_h = 640;  
-    int det_map_w = 640;  
+    int det_map_h = 960;  
+    int det_map_w = 544;  
     bool letterbox_fix = true;  
   
     // Recognition parameters  

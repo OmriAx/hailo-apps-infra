@@ -1,3 +1,12 @@
+clipper2_inc = include_directories('../third_party/clipper2/include')
+clipper2_src = files(
+  '../third_party/clipper2/src/clipper.engine.cpp',
+  '../third_party/clipper2/src/clipper.offset.cpp',
+  '../third_party/clipper2/src/clipper.rectclip.cpp',
+)
+clipper2_lib = static_library('clipper2', clipper2_src, include_directories: clipper2_inc)
+
+
 ################################################
 # YOLO HAILORTPP POST SOURCES
 ################################################
@@ -18,7 +27,7 @@ shared_library('yolo_hailortpp_postprocess',
 ################################################
 
 test_sources = [
-    'test.cpp',
+    'test_old.cpp',
     '../third_party/clipper2/src/clipper.engine.cpp',
     '../third_party/clipper2/src/clipper.offset.cpp',
     '../third_party/clipper2/src/clipper.rectclip.cpp'
@@ -27,7 +36,8 @@ shared_library('test_postprocess',
     test_sources,
     include_directories : [
         rapidjson_inc,
-        include_directories('../third_party/clipper2/include')
+        include_directories('../third_party/clipper2/include'),
+        clipper2_inc
     ],
     dependencies : postprocess_dep,
     gnu_symbol_visibility : 'default',
@@ -44,12 +54,15 @@ ocr_postprocess_sources = [
 ]
 shared_library('ocr_postprocess',
     ocr_postprocess_sources,
-    include_directories : rapidjson_inc,  
+    include_directories : [rapidjson_inc, clipper2_inc],
+    link_with : clipper2_lib,
     dependencies : postprocess_dep,
     gnu_symbol_visibility : 'default',
     install: true,
     install_dir: '/usr/local/hailo/resources/so',
 )
+
+
 
 ################################################
 # REMOVE LABELS POST SOURCES
